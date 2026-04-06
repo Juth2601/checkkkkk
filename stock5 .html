@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>ระบบเช็คสต็อก ร้านจุฑารัตน์ จันทบุรี</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.page{display:none}
+.page.active{display:block}
+</style>
+</head>
+
+<body class="bg-gray-100">
+
+<!-- LOGIN -->
+<div id="loginPage" class="page active p-6">
+<div class="max-w-sm mx-auto bg-white p-6 rounded shadow">
+<h2 class="text-xl mb-4">Login พนักงาน</h2>
+<input id="username" class="border p-2 w-full mb-3" placeholder="ชื่อพนักงาน">
+<button type="button" onclick="login()" class="bg-blue-600 text-white w-full p-2 rounded">
+Login
+</button>
+</div>
+</div>
+
+<!-- HEADER -->
+<div id="header" class="bg-blue-600 text-white p-4 text-xl font-bold hidden">
+🏪 ร้านจุฑารัตน์ จันทบุรี
+<span id="staffName" class="text-sm ml-3"></span>
+<button onclick="logout()" class="bg-red-500 text-sm px-2 py-1 rounded ml-3">Logout</button>
+</div>
+
+<!-- HOME -->
+<div id="homePage" class="page p-4">
+<h2 class="text-xl mb-4">เลือกหมวดหมู่</h2>
+
+<button onclick="selectCategory('เบ็ดเตล็ด')" class="w-full bg-purple-500 text-white p-4 rounded mb-3">
+เบ็ดเตล็ด
+</button>
+
+<button type="button" onclick="selectCategory('พลาสติก')" class="w-full bg-blue-500 text-white p-4 rounded">
+พลาสติก
+</button>
+
+<button type="button" onclick="openHistory()" class="w-full bg-green-500 text-white p-4 rounded mt-5">
+History
+</button>
+</div>
+
+<!-- COMPANY -->
+<div id="companyPage" class="page p-4">
+<h2 class="text-xl mb-4">เลือกบริษัท</h2>
+<div id="companyList"></div>
+<button type="button" onclick="goHome()" class="bg-gray-400 text-white px-4 py-2 rounded mt-3">Back</button>
+</div>
+
+<!-- STOCK -->
+<div id="stockPage" class="page p-4">
+<h2 id="stockTitle" class="text-xl mb-4"></h2>
+<div id="stockList"></div>
+
+<button type="button" onclick="saveStock()" class="bg-blue-600 text-white px-4 py-2 rounded">
+Save
+</button>
+<button type="button" onclick ="backCompany()" class="bg-gray-400 text-white px-4 py-2 rounded mt-3">
+Back
+</button>
+</div>
+
+<!-- HISTORY -->
+<div id="historyPage" class="page p-4">
+<h2 class="text-xl mb-3">History</h2>
+
+<div id="historyList"></div>
+
+<button onclick="clearHistory()" class="bg-red-500 text-white px-4 py-2 rounded mt-3">
+ล้างประวัติ
+</button>
+
+<button onclick="goHome()" class="bg-gray-400 text-white px-4 py-2 rounded mt-3">
+Back
+</button>
+
+<button onclick="testSend()" class="bg-red-500 text-white p-2">
+Test Send
+</button>
+</div>
+
+<script>
+const GOOGLE_SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwf53wQdKT7BO_-NUPjOFbZWBNfbjvXig4LPNBwx0BCtuDipFqcqeSLZWZvESgKjhuB4A/exec";
+const SHEET_POLL_MS = 10000;
+const JSONP_TIMEOUT_MS = 12000;
+let currentCategory="";
+let currentCompany="";
+let currentUser="";
+
+/* DATA */
+const data = {
+"เบ็ดเตล็ด": {
+    "RW": [
+        { name:"RW2003 ถ้วยตวง ด้าม8oz.พิมพ์สเกล 2003", unit:"ใบ/โหล"}
+    ],
+    "3M": [
+        { name:"232635000241 เทปแปะลังใส 48mmx40m. 3M", unit:"ม้วน/โหล"}
+    ]
+},
+"พลาสติก": {
+    "Modern": [
+        { name:"MD110A 0032 กล่องล้อชีค110ลิตร ตัวใสฝาสี Modern", unit:"ใบ"}
+    ],
+    "เรืองวา": [
+        { name:"RW0759 0759 โหลกลม1.6 ลิตร เรืองวา", unit:"ใบ/โหล"}
+    ],
+    "วรากร พลาส": [
+        { name:"WP45 C45 กะละมัง คละสี WP", unit:"ใบ/โหล"},
+        { name:"WP45BL C45 กะละมัง สีดำ WP", unit:"ใบ/โหล"},
+        { name:"WP55BL C55 กะละมัง สีดำ WP", unit:"ใบ/โหล"},
+        { name:"WP70 C70 กะละมัง 64ซม. WP", unit:"ใบ/โหล"},
+        { name:"WP02 NO.02 โกยผงด้ามยาว WP", unit:"ใบ/โหล"},
+        { name:"WP15BL NO.15 สีดำ เข่ง WP", unit:"ใบ/โหล"},
+        { name:"WP16B NO.16 ถังน้ำหูหิ้ว WP", unit:"ใบ/โหล"},
+        { name:"WP16BL NO.16 สีBL ถังน้ำหูหิ้ว WP", unit:"ใบ/โหล"},
+        { name:"WP40 NO.40 กล่องอเนกประสงค์ WP", unit:"ใบ/โหล"}
+    ]
+}
+};
+
+function showPage(id){
+document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+document.getElementById(id).classList.add("active");
+}
+
+/* LOGIN */
+function login(){
+let name=document.getElementById("username").value.trim();
+if(name===""){ alert("กรอกชื่อพนักงาน"); return; }
+
+currentUser=name;
+document.getElementById("staffName").innerText="พนักงาน: "+name;
+document.getElementById("header").classList.remove("hidden");
+
+showPage("homePage");
+}
+
+function logout(){
+location.reload();
+}
+
+/* HOME */
+function goHome(){
+showPage("homePage");
+}
+
+/* CATEGORY */
+function selectCategory(cat){
+currentCategory=cat;
+loadCompanies();
+showPage("companyPage");
+}
+
+/* COMPANY */
+function loadCompanies(){
+let html="";
+let companies=Object.keys(data[currentCategory]);
+companies.forEach(c=>{
+html+=`<button onclick="selectCompany('${c}')" class="w-full bg-white shadow p-4 rounded mb-3">${c}</button>`;
+});
+document.getElementById("companyList").innerHTML=html;
+}
+
+function selectCompany(company){
+currentCompany=company;
+loadStock();
+showPage("stockPage");
+}
+
+function backCompany(){
+showPage("companyPage");
+}
+
+/* STOCK */
+function loadStock(){
+let items=data[currentCategory][currentCompany];
+document.getElementById("stockTitle").innerText=currentCompany;
+
+let html="";
+items.forEach((item,i)=>{
+let units=item.unit.split("/");
+html+=`
+<div class="bg-white p-3 rounded shadow mb-3">
+<p>${item.name}</p>
+<input type="number" id="qty${i}" class="border p-1 w-24">
+<select id="unit${i}" class="border p-1">
+${units.map(u=>`<option value="${u}">${u}</option>`).join("")}
+</select>
+</div>
+`;
+});
+document.getElementById("stockList").innerHTML=html;
+}
+
+/* CONVERT */
+function convertToBase(qty,unit,unitText){
+if(unitText.includes("โหล")){
+if(unit=="โหล") return qty*12;
+}
+return qty;
+}
+
+/* SEND TO GOOGLE SHEET */
+function sendToGoogleSheet(data){
+fetch("https://script.google.com/macros/s/AKfycbwAM-hbVpm-veaZJh2AVv7svD-JgokTuYTVTaJkxfCr5veMEwKarcy2tDgQZl4zEfkoGQ/exec", {
+method: "POST",
+body: JSON.stringify(data),
+headers: {"Content-Type": "application/json"}
+})
+.then(res => res.text())
+.then(res => console.log("Sheet:", res));
+}
+
+/* SAVE */
+function saveStock(){
+let items=data[currentCategory][currentCompany];
+let history=JSON.parse(localStorage.getItem("history")||"[]");
+
+items.forEach((item,i)=>{
+let qty=document.getElementById("qty"+i).value;
+let unit=document.getElementById("unit"+i).value;
+
+if(qty){
+let baseQty=convertToBase(parseFloat(qty),unit,item.unit);
+
+let record = {
+staff: currentUser,
+category: currentCategory,
+company: currentCompany,
+item: item.name,
+qty: baseQty,
+date: new Date().toLocaleString()
+};
+
+sendToGoogleSheet(record);
+history.push(record);
+}
+});
+
+localStorage.setItem("history", JSON.stringify(history));
+
+alert("Saved");
+goHome();
+}
+
+/* HISTORY */
+function openHistory(){
+showPage("historyPage");
+loadHistory();
+}
+
+function loadHistory(){
+let history=JSON.parse(localStorage.getItem("history")||"[]");
+let html="";
+history.reverse().forEach(h=>{
+html+=`
+<div class="bg-white p-3 rounded shadow mb-2">
+<p>${h.date}</p>
+<p>พนักงาน: ${h.staff}</p>
+<p>${h.category} / ${h.company}</p>
+<p>${h.item}</p>
+<p>Qty: ${h.qty}</p>
+</div>
+`;
+});
+document.getElementById("historyList").innerHTML=html;
+}
+
+/* CLEAR */
+function clearHistory(){
+if(confirm("ต้องการล้างประวัติทั้งหมดใช่หรือไม่?")){
+localStorage.removeItem("history");
+loadHistory();
+}
+function testSend(){
+let data = {
+staff:"Test",
+category:"Test",
+company:"Test",
+item:"Test Item",
+qty:5
+};
+
+sendToGoogleSheet(data);
+}
+}
+</script>
+
+</body>
+</html>
